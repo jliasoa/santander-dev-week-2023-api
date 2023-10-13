@@ -1,0 +1,46 @@
+import pandas as pd
+import requests
+import json
+import openai
+
+# Defina a URL da API do Santander
+sdw2023_api_url = 'https://sdw-2023-prd.up.railway.app'
+
+# Defina a chave da API OpenAI
+openai_api_key = 'YOUR_OPENAI_API_KEY'  # Substitua isso pela sua chave da API OpenAI
+openai.api_key = openai_api_key
+
+# Extraia a lista de IDs de usuário a partir do arquivo CSV
+df = pd.read_csv('SDW2023.csv')
+user_ids = df['UserID'].tolist()
+
+# Função para obter dados do usuário
+def get_user(id):
+    response = requests.get(f'{sdw2023_api_url}/users/{id}')
+    return response.json() if response.status_code == 200 else None
+
+# Obter dados dos usuários
+users = [user for id in user_ids if (user := get_user(id)) is not None]
+
+# Função para gerar mensagem de IA
+def generate_ai_news(user):
+    completion = openai.Completion.create(
+        engine="text-davinci-003",
+        prompt=f"Write a marketing message emphasizing the importance of investment for {user['name']}.",
+        max_tokens=60
+    )
+    return completion.choices[0].text.strip()
+
+# Atualize a lista de "news" de cada usuário na API com a nova mensagem gerada
+def update_user_news(id, news):
+    payload = {"news": [{"description": news}]}
+    response = requests.put(f'{sdw2023_api_url}/users/{id}', json=payload)
+    if response.status_code == 200:
+        print(f'News updated for user {id}')
+    else:
+        print(f'Failed to update news for user {id}')
+
+# Itere sobre os usuários para gerar e atualizar as notícias
+for user in users:
+    generated_news = generate_ai_news(user)
+    update_user_news(user['id'], generated_news)
